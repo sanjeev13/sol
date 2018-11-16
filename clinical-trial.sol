@@ -80,11 +80,24 @@ contract ActorContract{
     
 }
 
+// Governace contract
 contract GovContract{
+    
+    struct ResultCount{
+        uint16 pass;
+        uint16 failed;
+    }
     address public owner;
     
     ActorContract actorContract;
 
+    // trial_address => trial details
+    mapping(address => TrialContract.Trial) trialDetails;
+    // trial_address => trial results
+    mapping(address => TrialContract.TestResult[]) trialResults;
+    // trial_address => trial count
+    mapping(address => ResultCount) trialResultCount;
+    
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     
     constructor(address actorContractAddress) public {
@@ -133,5 +146,58 @@ contract GovContract{
         actorContract.registerActor(_name,_addr,ActorContract.ActorType.subject);
         return true;
     }
+    
+    function createTrial(address _croAddress,address _pharmaAddress,string _drugName,uint16 _minTrialRequired, uint8 _passPercentage)
+    public onlyRegulatory returns(bool){
+        TrialContract trial = new TrialContract(_croAddress,_pharmaAddress,_drugName,_minTrialRequired,_passPercentage);
+        trialDetails[trial] = TrialContract.Trial(_croAddress,_pharmaAddress,_drugName,_minTrialRequired,_passPercentage);
+        return true;
+    }
+    
+    function addTrialResult(address _trialContactAddress,address _subjectAddress,string _details,bool _pass) onlyCRO public{
+      trialResults[_trialContactAddress].push(TrialContract.TestResult(_subjectAddress,_details,_pass));
+      ResultCount resultCount = trialResultCount[_trialContactAddress];
+      if(_pass){
+          resultCount.pass += 1;
+      }else{
+          resultCount.failed += 1; 
+      }
+      // auto-approve criteria
+      TrialContract.Trial details = trialDetails[_trialContactAddress];
+      uint16 totalResults = resultCount.pass + resultCount.failed;
+      uint16 passPercentage = (resultCount.pass / passPercentage) * 100;
+      if(totalResults >= details.minTrialRequired && 
+            passPercentage > details.passPercentage){
+        
+        // approve trial
+      }
+    }
 }
 
+contract TrialContract{
+    
+    enum Status {approved,inProgess,rejected}
+
+    struct Trial{
+        address croAddress;
+        address pharmaAddress;
+        string drugName;
+        uint16 minTrialRequired;
+        uint8 passPercentage;
+    }
+    
+    struct TestResult{
+        address testSubjectAddress;
+        string details;
+        bool pass;
+    }
+    
+    Trial trialDetails;
+    Status status;
+    
+    // intialise(); constructor
+    constructor(address _croAddress,address _pharmaAddress,string _drugName,uint16 _minTrialRequired, uint8 _passPercentage) public{
+        trialDetails = Trial(_croAddress,_pharmaAddress,_drugName,_minTrialRequired,_passPercentage);
+        status = Status.inProgess;
+    }
+}
